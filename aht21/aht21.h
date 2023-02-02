@@ -1,15 +1,10 @@
-#include <wiringPi.h>
+#pragma once
+
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
-
-#include <cstdio>
-#include <cstdlib>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
-#include <string.h>
-#include <cstdint>
-#include <errno.h>
 #include <memory.h>
 
 #include <optional>
@@ -29,6 +24,7 @@ constexpr int32_t AHT21_POWER_ON_DELAY = 100;
 constexpr int32_t AHT21_MEASUREMENT_DELAY = 80;
 
 constexpr uint8_t AHT21_STATUS_BIT_BUSY = 0x80;
+constexpr uint8_t AHT21_STATUS_BIT_CAL_ENABLE = 0x08;
 
 namespace tadragon {
 
@@ -39,7 +35,7 @@ namespace tadragon {
 
     class i2c : public ii2c {
     public:
-        i2c(const char* dev_name) : dev_name_{dev_name} {
+        i2c(const char* dev_name) : dev_name_{ dev_name } {
         }
         /*! I2Cスレーブデバイスからデータを読み込む.
          * @param[in] dev_addr デバイスアドレス.
@@ -96,7 +92,7 @@ namespace tadragon {
 
             buffer[0] = reg_addr;
 
-            if(data != nullptr && length != 0) {
+            if (data != nullptr && length != 0) {
                 memcpy(&buffer[1], data, length);  /* 2バイト目以降にデータをセット. */
             }
 
@@ -118,83 +114,84 @@ namespace tadragon {
     private:
         std::string dev_name_;
     };
+
+    class PiAHT21 {
+    public:
+        PiAHT21(tadragon::i2c& i2c, uint8_t addr = AHT21_DEFAULT_ADDRESS) : i2c_{ i2c }, addr_{ addr } {
+        }
+
+        std::optional<uint8_t> read_status() {
+            uint8_t buf[128] = { 0 };
+
+            if (i2c_.write(addr_, AHT21_STATUS_REG, nullptr, 0) == -1) {
+                return std::nullopt;
+            }
+
+            usleep(AHT21_MEASUREMENT_DELAY * 1000);
+
+            if (i2c_.read(addr_, AHT21_STATUS_REG, buf, 1) == -1) {
+                return std::nullopt;
+            }
+            return buf[0];
+        }
+
+        std::optional<uint8_t> read_register(uint8_t reg) {
+            uint8_t buf[128] = { 0 };
+
+            if (i2c_.write(addr_, reg, &reg, 1) == -1) {
+                return std::nullopt;
+            }
+
+            usleep(AHT21_MEASUREMENT_DELAY * 1000);
+
+            if (i2c_.read(addr_, reg, buf, 1) == -1) {
+                return std::nullopt;
+            }
+            return buf[0];
+        }
+
+        bool read_measurement(float* humi, float* tempature) {
+
+            uint8_t buf[16] = { 0 };
+
+            if (i2c_.write(addr_, AHT21_MEASURE_REG, AHT21_MEASURE_DATA, sizeof(AHT21_MEASURE_DATA)) == -1) {
+                return false;
+            }
+
+            uint8_t b = 0;
+            do {
+                usleep(AHT21_MEASUREMENT_DELAY * 1000);
+                const auto s = read_status();
+
+                if (s) {
+                    b = s.value();
+                }
+                else {
+                    return false;
+                }
+                // busyなら、もう一度readする
+            } while (b & AHT21_STATUS_BIT_BUSY);
+
+            // BUSY 解除後にreadする
+            if (i2c_.read(addr_, AHT21_MEASURE_REG, buf, 6) == -1) {
+                return false;
+            }
+
+            if (humi) {
+                int32_t value = ((buf[1] << 16) | (buf[2] << 8) | buf[3]) >> 4;
+                *humi = static_cast<float>((static_cast<float>(value) * 100.f) / 1048576); // 1048576は2の20乗
+            }
+            if (tempature) {
+                int32_t value = ((buf[3] & 0x0F) << 16) | (buf[4] << 8) | buf[5];
+                *tempature = static_cast<float>(((200.f * static_cast<float>(value)) / 1048576) - 50); // 1048576は2の20乗
+            }
+            return true;
+        }
+
+    private:
+        tadragon::i2c& i2c_;
+        uint8_t addr_;
+    };
 }
 
 
-class PiAHT21 {
-public:
-    PiAHT21 (tadragon::i2c& i2c, uint8_t addr = AHT21_DEFAULT_ADDRESS) : i2c_{i2c} , addr_ {addr} {
-    }
-
-    std::optional<uint8_t> read_status() {
-        uint8_t buf[128] = { 0 };
-
-        if(i2c_.write(addr_, AHT21_STATUS_REG, nullptr, 0) == -1) {
-            return std::nullopt;
-        }
-        
-        delay(AHT21_MEASUREMENT_DELAY);
-        
-        if (i2c_.read(addr_, AHT21_STATUS_REG, buf, 1) == -1) {
-            return std::nullopt;
-        }
-        return buf[0];
-    }
-
-    std::optional<uint8_t> read_register(uint8_t reg) {
-        uint8_t buf[128] = { 0 };
-
-        if(i2c_.write(addr_, reg, &reg, 1) == -1) {
-            return std::nullopt;
-        }
-
-        delay(AHT21_MEASUREMENT_DELAY);
-
-        if (i2c_.read(addr_, reg, buf, 1) == -1) {
-            return std::nullopt;
-        }
-        return buf[0];
-    }
-
-    bool read_measurement(float* humi, float* tempature) {
-
-        uint8_t buf[16] = { 0 };
-
-        if(i2c_.write(addr_, AHT21_MEASURE_REG , AHT21_MEASURE_DATA, sizeof(AHT21_MEASURE_DATA)) == -1) {
-            return false;
-        }
-
-        uint8_t b = 0;
-        do {
-
-            delay(AHT21_MEASUREMENT_DELAY);
-            const auto s = read_status();
-
-            if(s) {
-                b = s.value();
-            } else {
-                return false;
-            }
-            // busyなら、もう一度readする
-        } while(b & AHT21_STATUS_BIT_BUSY);
-
-        // BUSY 解除後にreadする
-        if(i2c_.read(addr_,AHT21_MEASURE_REG, buf, 6) == -1) {
-            return false;
-        }
-
-        if(humi) {
-            int32_t value =  ((buf[1] << 16) | (buf[2] << 8) | buf[3]) >> 4;
-            *humi = static_cast<float>((static_cast<float>(value) * 100.f) / 1048576); // 1048576は2の20乗
-        }
-        if(tempature) {
-            int32_t value = ((buf[3] & 0x0F) << 16) | (buf[4] << 8) | buf[5];
-            *tempature = static_cast<float>(((200.f * static_cast<float>(value)) / 1048576) - 50); // 1048576は2の20乗
-        }
-        return true;
-    }
-
-private:
-    uint8_t addr_;
-    tadragon::i2c& i2c_;
-};
