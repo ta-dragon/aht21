@@ -11,6 +11,7 @@ int main(void)
 		printf("Error...\n");
 		return 0;
 	}
+
 	if((status.value() & AHT21_STATUS_BIT_CAL_ENABLE) != AHT21_STATUS_BIT_CAL_ENABLE) {
 		return 0;
 	}
@@ -19,9 +20,12 @@ int main(void)
 	{
 		float humi = 0;
 		float tmp = 0;
-		aht21.read_measurement(&humi,&tmp);
-		printf("Temprature : %.2f\n",tmp);
-		printf("humidity   : %.2f\n",humi);
+		if(aht21.read_measurement(&humi,&tmp)) {
+			printf("Temprature : %.2f\n",tmp);
+			printf("humidity   : %.2f\n",humi);
+		} else {
+			printf("measurement failure...\n");
+		}
 		sleep(1);
 	}
 

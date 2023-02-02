@@ -10,19 +10,10 @@
 #include <optional>
 
 constexpr uint8_t AHT21_DEFAULT_ADDRESS = 0x38;   // SENSOR ADDRESS
-
 constexpr uint8_t AHT21_MEASURE_REG = 0xAC;
-
 constexpr uint8_t AHT21_MEASURE_DATA[2] = { 0x33, 0x00 };
-
-constexpr uint8_t AHT21_CALIBRATED_STATUS = 0x18;
-
 constexpr uint8_t AHT21_STATUS_REG = 0x71;        // Status register
-
-constexpr int32_t AHT21_POWER_ON_DELAY = 100;
-
 constexpr int32_t AHT21_MEASUREMENT_DELAY = 80;
-
 constexpr uint8_t AHT21_STATUS_BIT_BUSY = 0x80;
 constexpr uint8_t AHT21_STATUS_BIT_CAL_ENABLE = 0x08;
 
