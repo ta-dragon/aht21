@@ -20,8 +20,9 @@ constexpr uint8_t AHT21_STATUS_BIT_CAL_ENABLE = 0x08;
 namespace tadragon {
 
     class ii2c {
-        virtual int8_t read(uint8_t dev_addr, uint8_t reg_addr, uint8_t* data, uint16_t length) = 0;
-        virtual int8_t write(uint8_t dev_addr, uint8_t reg_addr, const uint8_t* data, uint16_t length) = 0;
+    public:
+        virtual int8_t read(uint8_t dev_addr, uint8_t reg_addr, uint8_t* data, uint16_t length) const = 0;
+        virtual int8_t write(uint8_t dev_addr, uint8_t reg_addr, const uint8_t* data, uint16_t length) const = 0;
     };
 
     class i2c : public ii2c {
@@ -35,7 +36,7 @@ namespace tadragon {
          * @param[in] length 読み込むデータの長さ.
          * @note https://qiita.com/nhiro/items/feb91561a6752144af93
          */
-        int8_t read(uint8_t dev_addr, uint8_t reg_addr, uint8_t* data, uint16_t length) {
+        int8_t read(uint8_t dev_addr, uint8_t reg_addr, uint8_t* data, uint16_t length) const {
             /* I2Cデバイスをオープンする. */
             int32_t fd = open(dev_name_.c_str(), O_RDWR);
             if (fd == -1) {
@@ -67,7 +68,7 @@ namespace tadragon {
          * @param[in] length 書き込むデータの長さ.
          * @note https://qiita.com/nhiro/items/feb91561a6752144af93
          */
-        int8_t write(uint8_t dev_addr, uint8_t reg_addr, const uint8_t* data, uint16_t length) {
+        int8_t write(uint8_t dev_addr, uint8_t reg_addr, const uint8_t* data, uint16_t length) const {
             /* I2Cデバイスをオープンする. */
             int32_t fd = open(dev_name_.c_str(), O_RDWR);
             if (fd == -1) {
@@ -103,16 +104,16 @@ namespace tadragon {
             return 0;
         }
     private:
-        std::string dev_name_;
+        const std::string dev_name_;
     };
 
     class PiAHT21 {
     public:
-        PiAHT21(tadragon::i2c& i2c, uint8_t addr = AHT21_DEFAULT_ADDRESS) : i2c_{ i2c }, addr_{ addr } {
+        PiAHT21(ii2c& i2c, uint8_t addr = AHT21_DEFAULT_ADDRESS) : i2c_{ i2c }, addr_{ addr } {
         }
 
         std::optional<uint8_t> read_status() {
-            uint8_t buf[128] = { 0 };
+            uint8_t buf[2] = { 0 };
 
             if (i2c_.write(addr_, AHT21_STATUS_REG, nullptr, 0) == -1) {
                 return std::nullopt;
@@ -180,7 +181,7 @@ namespace tadragon {
         }
 
     private:
-        tadragon::i2c& i2c_;
+        ii2c& i2c_;
         uint8_t addr_;
     };
 }
